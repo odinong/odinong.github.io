@@ -1,1 +1,219 @@
-Hello World
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GIF Converter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #1e1e1e;
+            color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #2a2a2a;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .tabs {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: #3a3a3a;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        .tab:hover {
+            background-color: #4a4a4a;
+        }
+        .tab-content {
+            display: none;
+            padding: 20px;
+            background-color: #333;
+            border-radius: 5px;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out, visibility 0s linear 0.5s;
+        }
+        .tab-content.active {
+            display: block;
+            opacity: 1;
+            transition-delay: 0s;
+        }
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #007bff;
+            border: none;
+            color: #fff;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background-color 0.3s;
+        }
+        .button:hover {
+            background-color: #0056b3;
+        }
+        .progress {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #282828;
+            border-radius: 5px;
+            border: 1px solid #444;
+            text-align: center;
+        }
+        .progress-bar {
+            width: 100%;
+            background-color: #ddd;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        .progress-bar-fill {
+            height: 20px;
+            background-color: #4caf50;
+            width: 0%;
+            transition: width 0.4s ease;
+        }
+        input[type="file"] {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #555;
+            background-color: #222;
+            color: #fff;
+        }
+        input[type="file"]:hover {
+            border-color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="tabs">
+            <div class="tab" onclick="openTab('videoTab')">Video to GIF</div>
+            <div class="tab" onclick="openTab('imageTab')">Image to GIF</div>
+        </div>
+        <div id="videoTab" class="tab-content">
+            <h2>Select a video file to convert to GIF</h2>
+            <input type="file" id="videoFile" accept="video/*">
+            <button class="button" onclick="convertVideo()">Convert Video</button>
+            <div class="progress">
+                <div class="progress-bar">
+                    <div class="progress-bar-fill" id="videoProgressBar"></div>
+                </div>
+                <div id="videoProgressText"></div>
+            </div>
+        </div>
+        <div id="imageTab" class="tab-content">
+            <h2>Select an image file to convert to GIF</h2>
+            <input type="file" id="imageFile" accept="image/*">
+            <button class="button" onclick="convertImage()">Convert Image</button>
+            <div class="progress">
+                <div class="progress-bar">
+                    <div class="progress-bar-fill" id="imageProgressBar"></div>
+                </div>
+                <div id="imageProgressText"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ffmpeg.wasm/0.10.5/ffmpeg.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.min.js"></script>
+    <script>
+        function openTab(tabName) {
+            var i, tabContent, tab;
+            tabContent = document.getElementsByClassName("tab-content");
+            for (i = 0; i < tabContent.length; i++) {
+                tabContent[i].classList.remove('active');
+                tabContent[i].style.opacity = 0;
+                tabContent[i].style.visibility = 'hidden';
+            }
+            tab = document.getElementsByClassName("tab");
+            for (i = 0; i < tab.length; i++) {
+                tab[i].style.backgroundColor = "";
+            }
+            var activeTab = document.getElementById(tabName);
+            activeTab.classList.add('active');
+            setTimeout(() => {
+                activeTab.style.opacity = 1;
+                activeTab.style.visibility = 'visible';
+            }, 10);
+        }
+
+        function updateProgressBar(elementId, percentage) {
+            var progressBarFill = document.getElementById(elementId);
+            progressBarFill.style.width = percentage + '%';
+            if (percentage >= 100) {
+                document.getElementById(elementId + 'Text').innerText = 'Conversion Complete';
+            } else {
+                document.getElementById(elementId + 'Text').innerText = percentage + '%';
+            }
+        }
+
+        async function convertVideo() {
+            var videoFile = document.getElementById('videoFile').files[0];
+            if (videoFile) {
+                document.getElementById('videoProgressText').innerText = 'Converting video to GIF...';
+                const { createFFmpeg, fetchFile } = FFmpeg;
+                const ffmpeg = createFFmpeg({ log: true });
+                await ffmpeg.load();
+                ffmpeg.FS('writeFile', videoFile.name, await fetchFile(videoFile));
+                await ffmpeg.run('-i', videoFile.name, '-vf', 'fps=10,scale=320:-1:flags=lanczos', 'output.gif');
+
+                let videoProgress = 0;
+                ffmpeg.setProgress(({ ratio }) => {
+                    videoProgress = Math.round(ratio * 100);
+                    updateProgressBar('videoProgressBar', videoProgress);
+                });
+
+                const data = ffmpeg.FS('readFile', 'output.gif');
+                const gifBlob = new Blob([data.buffer], { type: 'image/gif' });
+                const gifUrl = URL.createObjectURL(gifBlob);
+                document.getElementById('videoProgressText').innerHTML = `<a href="${gifUrl}" download="video.gif">Download GIF</a>`;
+            } else {
+                alert('Please select a video file');
+            }
+        }
+
+        function convertImage() {
+            var imageFile = document.getElementById('imageFile').files[0];
+            if (imageFile) {
+                document.getElementById('imageProgressText').innerText = 'Converting image to GIF...';
+                const gif = new GIF({
+                    workers: 2,
+                    quality: 10,
+                    workerScript: 'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js'
+                });
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() {
+                        gif.addFrame(img, { copy: true, delay: 200 });
+                        gif.render();
+                        gif.on('progress', function(p) {
+                            updateProgressBar('imageProgressBar', p * 100);
+                        });
+                    }
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(imageFile);
+                gif.on('finished', function(blob) {
+                    const gifUrl = URL.createObjectURL(blob);
+                    document.getElementById('imageProgressText').innerHTML = `<a href="${gifUrl}" download="image.gif">Download GIF</a>`;
+                });
+            } else {
+                alert('Please select an image file');
+            }
+        }
+    </script>
+</body>
+</html>
